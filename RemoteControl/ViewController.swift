@@ -140,18 +140,21 @@ final class ViewController: NSViewController, WebSocketDelegate {
 
     private func promptWaitPermission() {
         let alert = NSAlert()
-        alert.messageText = "Wait for permission…"
-        alert.informativeText = "“Remote Control” requires “Accessibility” and ”Screen Recording“ permissions to continue."
-        alert.addButton(withTitle: "Continue")
-        alert.buttons.first?.isHidden = true
+        alert.messageText = NSLocalizedString("Wait for permission…", comment: "")
+        alert.informativeText = NSLocalizedString("“Remote Control” requires “Accessibility” and ”Screen Recording“ permissions to continue.", comment: "")
+        alert.addButton(withTitle: NSLocalizedString("Terminate", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Continue", comment: ""))
+        alert.buttons.last?.isHidden = true
         let indicator = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 32, height: 32))
         indicator.style = .spinning
         indicator.sizeToFit()
         indicator.startAnimation(nil)
         alert.accessoryView = indicator
         alert.beginSheetModal(for: view.window!) { [unowned self] resp in
-            if resp == .alertFirstButtonReturn {
+            if resp == .alertSecondButtonReturn {
                 promptWaitPlayer()
+            } else {
+                NSApp.terminate(nil)
             }
         }
 
@@ -170,7 +173,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             } while !hasAXPermission || !hasSCPermission
 
             DispatchQueue.main.async { [unowned self] in
-                view.window?.endSheet(alert.window, returnCode: .alertFirstButtonReturn)
+                view.window?.endSheet(alert.window, returnCode: .alertSecondButtonReturn)
             }
         }
     }
@@ -203,19 +206,22 @@ final class ViewController: NSViewController, WebSocketDelegate {
 
     private func promptWaitPlayer() {
         let alert = NSAlert()
-        alert.messageText = "Wait for “QuickTime Player”…"
-        alert.informativeText = "Launch “QuickTime Player” and open a new movie recording window to continue."
-        alert.addButton(withTitle: "Cancel")
-        alert.buttons.first?.isHidden = true
+        alert.messageText = NSLocalizedString("Wait for “QuickTime Player”…", comment: "")
+        alert.informativeText = NSLocalizedString("Launch “QuickTime Player” and open a new movie recording window to continue.", comment: "")
+        alert.addButton(withTitle: NSLocalizedString("Terminate", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Continue", comment: ""))
+        alert.buttons.last?.isHidden = true
         let indicator = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 32, height: 32))
         indicator.style = .spinning
         indicator.sizeToFit()
         indicator.startAnimation(nil)
         alert.accessoryView = indicator
         alert.beginSheetModal(for: view.window!) { [unowned self] resp in
-            if resp == .alertFirstButtonReturn {
+            if resp == .alertSecondButtonReturn {
                 beginMonitorPlayer()
                 promptAskAddress()
+            } else {
+                NSApp.terminate(nil)
             }
         }
 
@@ -225,7 +231,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             } while !updatePlayerState()
 
             DispatchQueue.main.async { [unowned self] in
-                view.window?.endSheet(alert.window, returnCode: .alertFirstButtonReturn)
+                view.window?.endSheet(alert.window, returnCode: .alertSecondButtonReturn)
             }
         }
     }
@@ -273,9 +279,9 @@ final class ViewController: NSViewController, WebSocketDelegate {
 
     private func promptAskAddress() {
         let alert = NSAlert()
-        alert.messageText = "XXTouch"
-        alert.informativeText = "Open “XXTouch”, turn on “Remote Address” switch and enter the ip address shown below."
-        alert.addButton(withTitle: "Connect")
+        alert.messageText = NSLocalizedString("XXTouch", comment: "")
+        alert.informativeText = NSLocalizedString("Open “XXTouch”, turn on “Remote Address” switch and enter the ip address shown below.", comment: "")
+        alert.addButton(withTitle: NSLocalizedString("Connect", comment: ""))
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 228, height: 24))
         field.stringValue = UserDefaults.standard.string(forKey: addressDefaultsKey) ?? ""
         field.alignment = .center
@@ -289,7 +295,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
                     endCaptureAddress()
                     promptConnection()
                 } else {
-                    promptModalMessage("Invalid Address", "Please input a valid IPv4 address.") { [unowned self] _ in
+                    promptModalMessage(NSLocalizedString("Invalid Address", comment: ""), NSLocalizedString("Please input a valid IPv4 address.", comment: "")) { [unowned self] _ in
                         if resp == .alertFirstButtonReturn {
                             promptAskAddress()
                         } else {
@@ -364,10 +370,10 @@ final class ViewController: NSViewController, WebSocketDelegate {
 
     private func promptModalMessage(_ message: String, _ informative: String?, completionHandler: @escaping (NSApplication.ModalResponse) -> Void) {
         let alert = NSAlert()
-        alert.addButton(withTitle: "Try Again")
-        alert.addButton(withTitle: "Terminate")
+        alert.addButton(withTitle: NSLocalizedString("Try Again", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Terminate", comment: ""))
         alert.messageText = message
-        alert.informativeText = informative ?? "An unknown error occurred."
+        alert.informativeText = informative ?? NSLocalizedString("An unknown error occurred.", comment: "")
         alert.beginSheetModal(for: view.window!) { resp in
             completionHandler(resp)
         }
@@ -394,8 +400,8 @@ final class ViewController: NSViewController, WebSocketDelegate {
         }
 
         let alert = NSAlert()
-        alert.messageText = "Connect to \(deviceAddress)…"
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = String(format: NSLocalizedString("Connect to “%@”…", comment: ""), deviceAddress)
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         alert.buttons.first?.isHidden = true
         let indicator = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 32, height: 32))
         indicator.style = .spinning
@@ -407,7 +413,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
         DispatchQueue.global(qos: .userInitiated).async { [unowned self] in
             fetchAssignedName { [unowned self] name in
                 if let name = name {
-                    alert.messageText = "Connect to \(name)…"
+                    alert.messageText = String(format: NSLocalizedString("Connect to “%@”…", comment: ""), name)
                 }
                 fetchRunningStatus { [unowned self] status in
                     if status == "f00" {
@@ -463,10 +469,10 @@ final class ViewController: NSViewController, WebSocketDelegate {
         }
         
         let alert = NSAlert()
-        alert.messageText = "Control Confirm"
-        alert.informativeText = "Will begin control \(deviceLabel), continue?"
-        alert.addButton(withTitle: "Continue")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = NSLocalizedString("Control Confirm", comment: "")
+        alert.informativeText = String(format: NSLocalizedString("Will begin control “%@”, continue?", comment: ""), deviceLabel)
+        alert.addButton(withTitle: NSLocalizedString("Continue", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         alert.beginSheetModal(for: view.window!) { [unowned self] resp in
             if resp == .alertFirstButtonReturn {
                 promptSpawn(deviceLabel: deviceLabel)
@@ -478,8 +484,8 @@ final class ViewController: NSViewController, WebSocketDelegate {
     
     private func promptSpawn(deviceLabel: String) {
         let alert = NSAlert()
-        alert.messageText = "Connect to \(deviceLabel)…"
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = String(format: NSLocalizedString("Connect to “%@”…", comment: ""), deviceLabel)
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         alert.buttons.first?.isHidden = true
         let indicator = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 32, height: 32))
         indicator.style = .spinning
@@ -495,7 +501,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             
             guard spawnSucceed else {
                 DispatchQueue.main.async { [unowned self] in
-                    promptModalMessage("Connection Failed", spawnErrorMessage) { [unowned self] resp in
+                    promptModalMessage(NSLocalizedString("Connection Failed", comment: ""), spawnErrorMessage) { [unowned self] resp in
                         if resp == .alertFirstButtonReturn {
                             promptAskAddress()
                         } else {
@@ -509,7 +515,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             beginStarscream { [unowned self] secondConnected, connectionErrorMessage in
                 guard secondConnected else {
                     DispatchQueue.main.async { [unowned self] in
-                        promptModalMessage("Connection Failed", connectionErrorMessage) { [unowned self] resp in
+                        promptModalMessage(NSLocalizedString("Connection Failed", comment: ""), connectionErrorMessage) { [unowned self] resp in
                             if resp == .alertFirstButtonReturn {
                                 promptAskAddress()
                             } else {
@@ -542,11 +548,11 @@ final class ViewController: NSViewController, WebSocketDelegate {
                     return
                 }
                 guard let respObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                    completionHandler(false, "failed to decode response")
+                    completionHandler(false, NSLocalizedString("Failed to decode response.", comment: ""))
                     return
                 }
                 guard let respCode = respObject["code"] as? Int else {
-                    completionHandler(false, "invalid response")
+                    completionHandler(false, NSLocalizedString("Invalid response.", comment: ""))
                     return
                 }
                 guard respCode == 0 else {
@@ -597,7 +603,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             timeoutCount += 1
             if timeoutCount > 3 {
                 invalidateConnectionTimer()
-                completionHandler(false, "Connection timeout.")
+                completionHandler(false, NSLocalizedString("Connection timeout.", comment: ""))
                 return
             }
         })
@@ -696,7 +702,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             break
         case .cancelled:
             isConnected = false
-            failureReason = "Connection cancelled."
+            failureReason = NSLocalizedString("Connection cancelled.", comment: "")
         case .error(let error):
             isConnected = false
             failureReason = error?.localizedDescription
@@ -704,7 +710,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
         
         if !isConnected, let failureReason = failureReason {
             endStarscream()
-            promptModalMessage("Connection Interrupted", failureReason) { [unowned self] resp in
+            promptModalMessage(NSLocalizedString("Connection Interrupted", comment: ""), failureReason) { [unowned self] resp in
                 if resp == .alertFirstButtonReturn {
                     promptAskAddress()
                 } else {
@@ -1271,8 +1277,8 @@ final class ViewController: NSViewController, WebSocketDelegate {
         }
         
         let alert = NSAlert()
-        alert.messageText = "Recognizing…"
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = NSLocalizedString("Recognizing…", comment: "")
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: ""))
         alert.buttons.first?.isHidden = true
         let indicator = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 32, height: 32))
         indicator.style = .spinning
