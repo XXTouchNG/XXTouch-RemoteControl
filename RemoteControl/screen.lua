@@ -111,7 +111,7 @@ local server =
     websocket.server.ev.listen {
     protocols = {
         ["RC"] = function(ws)
-            sys.toast("已经建立远程控制连接")
+            sys.toast("已经建立远程控制连接", device.front_orien())
             local index = 5
             ev.Timer.new(
                 function()
@@ -119,12 +119,19 @@ local server =
                         for _, btn in ipairs(d_btn) do
                             key.up(btn[1], btn[2])
                         end
-                        sys.toast("已断开远程控制连接")
+                        sys.toast("已断开远程控制连接", device.front_orien())
                         os.exit()
                     end
                     index = index - 1
                     local w, h = screen.size()
-                    ws:send(json.encode({ mode = "heart", size = { w = w, h = h } }))
+                    local o = device.front_orien()
+                    if _w ~= w or _h ~= h or _o ~= o then
+                        _w, _h, _o = w, h, o
+                        screen.init(o)  -- auto rotate screen
+                        ws:send(json.encode({ mode = "heart", size = { w = w, h = h } }))
+                    else
+                        ws:send(json.encode({ mode = "heart" }))
+                    end
                 end,
                 1,
                 1
@@ -142,12 +149,11 @@ local server =
                                 touch.up(28)
                             elseif jobj.mode == "clipboard" then
                                 sys.toast(jobj.data)
-                                _old = jobj.data
                                 pasteboard.write(jobj.data)
                             elseif jobj.mode == "clipboard_read" then
-                                _new = pasteboard.read()
-                                if _new then
-                                    ws:send(json.encode({ mode = "clipboard_read", data = _new }))
+                                local pbtext = pasteboard.read()
+                                if pbtext then
+                                    ws:send(json.encode({ mode = "clipboard_read", data = pbtext }))
                                 end
                             elseif jobj.mode == "send_text" then
                                 key.send_text(jobj.data)
@@ -186,6 +192,8 @@ local server =
                                 key.press(0x0C, 48)
                             elseif jobj.mode == "snapshot" then
                                 key.press(0x0C, 0x65)
+                            elseif jobj.mode == "save_snapshot" then
+                                ws:send(json.encode({ mode = "save_snapshot", data = string.base64_encode(screen.image():png_data()) }))
                             elseif jobj.mode == "mute" then
                                 key.press(0x0C, 0xE2)
                             elseif jobj.mode == "volume_increment" then
@@ -195,7 +203,7 @@ local server =
                             elseif jobj.mode == "toggle_keyboard" then
                                 key.press(0x0C, 0x1AE)
                             elseif jobj.mode == "quit" then
-                                sys.toast("已断开远程控制连接")
+                                sys.toast("已断开远程控制连接", device.front_orien())
                                 os.exit()
                             elseif jobj.mode == "heart" then
                                 index = 5

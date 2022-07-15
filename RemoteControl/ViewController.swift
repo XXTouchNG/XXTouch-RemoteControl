@@ -86,7 +86,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("os.exit()")
+        debugPrint("os.exit()")
         socketWrite(["mode": "quit"], to: connectedSocket)
     }
     
@@ -312,7 +312,9 @@ final class ViewController: NSViewController, WebSocketDelegate {
         let addressRegex = try! NSRegularExpression(pattern: Regex.anywhereIPAddress)
         captureTimer?.invalidate()
         captureTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true, block: { [unowned self] timer in
-            guard let playerWindowID = playerWindowID, let playerWindowBounds = playerWindowBounds else {
+            guard let playerWindowID = playerWindowID,
+                  let playerWindowBounds = playerWindowBounds
+            else {
                 return
             }
 
@@ -653,12 +655,16 @@ final class ViewController: NSViewController, WebSocketDelegate {
             isConnected = false
             failureReason = reason
         case .text(let string):
-            print("Received text: \(string)")
             if let respObject = socketRead(string: string) as? [String: Any] {
                 if respObject["mode"] as? String == "heart" {
-                    if let sizeDict = respObject["size"] as? [String: Any] {
-                        screenWidth = sizeDict["w"] as? CGFloat
-                        screenHeight = sizeDict["h"] as? CGFloat
+                    if let sizeDict = respObject["size"] as? [String: Any]
+                    {
+                        if let width = sizeDict["w"] as? CGFloat,
+                           let height = sizeDict["h"] as? CGFloat
+                        {
+                            screenWidth = width
+                            screenHeight = height
+                        }
                     }
                     socketWrite(["mode": "heart"], to: client)
                 }
@@ -669,9 +675,16 @@ final class ViewController: NSViewController, WebSocketDelegate {
                         pasteboard.setString(clipboardText, forType: .string)
                     }
                 }
+                else if respObject["mode"] as? String == "save_snapshot" {
+                    if let snapshotText = respObject["data"] as? String,
+                       let snapshotData = Data(base64Encoded: snapshotText)
+                    {
+                        let savedURL = saveScreenshot(snapshotData)
+                        NSWorkspace.shared.activateFileViewerSelecting([savedURL])
+                    }
+                }
             }
         case .binary(let data):
-            print("Received data: \(data.count)")
             _ = socketRead(data: data)
         case .ping(_):
             break
@@ -701,6 +714,29 @@ final class ViewController: NSViewController, WebSocketDelegate {
         }
     }
     
+    private static var screenshotDateFormatter: DateFormatter =
+    {
+        let formatter = DateFormatter.init()
+        formatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+        return formatter
+    }()
+    
+    private func saveScreenshot(_ data: Data) -> URL {
+        let picturesDirectoryURL = FileManager.default
+            .urls(for: .picturesDirectory, in: .userDomainMask)
+            .first!.appendingPathComponent("RemoteControl")
+            .standardizedFileURL
+        var isDirectory: ObjCBool = false
+        if !FileManager.default.fileExists(atPath: picturesDirectoryURL.path, isDirectory: &isDirectory) {
+            try? FileManager.default.createDirectory(at: picturesDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+        }
+        var picturesURL = picturesDirectoryURL
+        picturesURL.appendPathComponent("screenshot_\(Self.screenshotDateFormatter.string(from: Date.init()))")
+        picturesURL.appendPathExtension("png")
+        try? data.write(to: picturesURL)
+        return picturesURL
+    }
+    
 
     // MARK: -
     
@@ -712,10 +748,14 @@ final class ViewController: NSViewController, WebSocketDelegate {
         }
         
         let locInView = view.convert(event.locationInWindow, from: nil)
+        let isStandard = (view.bounds.height > view.bounds.width && screenHeight > screenWidth) || (view.bounds.height < view.bounds.width && screenHeight < screenWidth)
         
-        return CGPoint(
+        return isStandard ? CGPoint(
             x: min(max(locInView.x / view.bounds.width, 0.0), 1.0) * screenWidth,
             y: min(max(locInView.y / view.bounds.height, 0.0), 1.0) * screenHeight
+        ) : CGPoint(
+            x: min(max(locInView.x / view.bounds.width, 0.0), 1.0) * screenHeight,
+            y: min(max(locInView.y / view.bounds.height, 0.0), 1.0) * screenWidth
         )
     }
 
@@ -728,7 +768,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print(String(format: "touch.down(%d, %d)", Int(locInRemote.x), Int(locInRemote.y)))
+        debugPrint(String(format: "touch.down(%d, %d)", Int(locInRemote.x), Int(locInRemote.y)))
         socketWrite(["mode": "down", "x": Int(locInRemote.x), "y": Int(locInRemote.y)], to: connectedSocket)
     }
 
@@ -741,7 +781,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print(String(format: "touch.up(%d, %d)", Int(locInRemote.x), Int(locInRemote.y)))
+        debugPrint(String(format: "touch.up(%d, %d)", Int(locInRemote.x), Int(locInRemote.y)))
         socketWrite(["mode": "up", "x": Int(locInRemote.x), "y": Int(locInRemote.y)], to: connectedSocket)
     }
 
@@ -754,7 +794,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print(String(format: "touch.move(%d, %d)", Int(locInRemote.x), Int(locInRemote.y)))
+        debugPrint(String(format: "touch.move(%d, %d)", Int(locInRemote.x), Int(locInRemote.y)))
         socketWrite(["mode": "move", "x": Int(locInRemote.x), "y": Int(locInRemote.y)], to: connectedSocket)
     }
 
@@ -763,7 +803,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.down('HOMEBUTTON')")
+        debugPrint("key.down('HOMEBUTTON')")
         socketWrite(["mode": "home_down"], to: connectedSocket)
     }
 
@@ -772,14 +812,17 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.up('HOMEBUTTON')")
+        debugPrint("key.up('HOMEBUTTON')")
         socketWrite(["mode": "home_up"], to: connectedSocket)
     }
 
     override func rightMouseDragged(with event: NSEvent) {
-        print("right dragged")
+        debugPrint("right dragged")
     }
     
+    // References:
+    // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/keyCode
+    // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values
     private static let browserKeyCodeMapping: [UInt16: UInt16] = [
         0x00: 0x41,
         0x01: 0x53,
@@ -896,7 +939,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
     
     private func browserKeyCode(with event: NSEvent) -> UInt16? {
         guard let mappedKeyCode = Self.browserKeyCodeMapping[event.keyCode] else {
-            print(String(format: "unknown keyCode = %d", event.keyCode))
+            debugPrint(String(format: "unknown keyCode = %d", event.keyCode))
             return nil
         }
         return mappedKeyCode
@@ -917,9 +960,9 @@ final class ViewController: NSViewController, WebSocketDelegate {
             let capsLockIsDown = event.modifierFlags.contains(.capsLock)
             if capsLockIsDown != capsLockWasDown {
                 if capsLockIsDown {
-                    print("flag .capsLock down")
+                    debugPrint("flag .capsLock down")
                 } else {
-                    print("flag .capsLock up")
+                    debugPrint("flag .capsLock up")
                 }
                 isDown = capsLockIsDown
                 modifierFlagState[NSEvent.ModifierFlags.capsLock.rawValue] = capsLockIsDown
@@ -932,9 +975,9 @@ final class ViewController: NSViewController, WebSocketDelegate {
             let shiftIsDown = event.modifierFlags.contains(.shift)
             if shiftIsDown != shiftWasDown {
                 if shiftIsDown {
-                    print("flag .shift down")
+                    debugPrint("flag .shift down")
                 } else {
-                    print("flag .shift up")
+                    debugPrint("flag .shift up")
                 }
                 isDown = shiftIsDown
                 modifierFlagState[NSEvent.ModifierFlags.shift.rawValue] = shiftIsDown
@@ -947,9 +990,9 @@ final class ViewController: NSViewController, WebSocketDelegate {
             let controlIsDown = event.modifierFlags.contains(.control)
             if controlIsDown != controlWasDown {
                 if controlIsDown {
-                    print("flag .control down")
+                    debugPrint("flag .control down")
                 } else {
-                    print("flag .control up")
+                    debugPrint("flag .control up")
                 }
                 isDown = controlIsDown
                 modifierFlagState[NSEvent.ModifierFlags.control.rawValue] = controlIsDown
@@ -962,9 +1005,9 @@ final class ViewController: NSViewController, WebSocketDelegate {
             let optionIsDown = event.modifierFlags.contains(.option)
             if optionIsDown != optionWasDown {
                 if optionIsDown {
-                    print("flag .option down")
+                    debugPrint("flag .option down")
                 } else {
-                    print("flag .option up")
+                    debugPrint("flag .option up")
                 }
                 isDown = optionIsDown
                 modifierFlagState[NSEvent.ModifierFlags.option.rawValue] = optionIsDown
@@ -977,9 +1020,9 @@ final class ViewController: NSViewController, WebSocketDelegate {
             let commandIsDown = event.modifierFlags.contains(.command)
             if commandIsDown != commandWasDown {
                 if commandIsDown {
-                    print("flag .command down")
+                    debugPrint("flag .command down")
                 } else {
-                    print("flag .command up")
+                    debugPrint("flag .command up")
                 }
                 isDown = commandIsDown
                 modifierFlagState[NSEvent.ModifierFlags.command.rawValue] = commandIsDown
@@ -992,9 +1035,9 @@ final class ViewController: NSViewController, WebSocketDelegate {
             let numericPadIsDown = event.modifierFlags.contains(.numericPad)
             if numericPadIsDown != numericPadWasDown {
                 if numericPadIsDown {
-                    print("flag .numericPad down")
+                    debugPrint("flag .numericPad down")
                 } else {
-                    print("flag .numericPad up")
+                    debugPrint("flag .numericPad up")
                 }
                 isDown = numericPadIsDown
                 modifierFlagState[NSEvent.ModifierFlags.numericPad.rawValue] = numericPadIsDown
@@ -1007,9 +1050,9 @@ final class ViewController: NSViewController, WebSocketDelegate {
             let helpIsDown = event.modifierFlags.contains(.help)
             if helpIsDown != helpWasDown {
                 if helpIsDown {
-                    print("flag .help down")
+                    debugPrint("flag .help down")
                 } else {
-                    print("flag .help up")
+                    debugPrint("flag .help up")
                 }
                 isDown = helpIsDown
                 modifierFlagState[NSEvent.ModifierFlags.help.rawValue] = helpIsDown
@@ -1022,9 +1065,9 @@ final class ViewController: NSViewController, WebSocketDelegate {
             let functionIsDown = event.modifierFlags.contains(.function)
             if functionIsDown != functionWasDown {
                 if functionIsDown {
-                    print("flag .function down")
+                    debugPrint("flag .function down")
                 } else {
-                    print("flag .function up")
+                    debugPrint("flag .function up")
                 }
                 isDown = functionIsDown
                 modifierFlagState[NSEvent.ModifierFlags.function.rawValue] = functionIsDown
@@ -1035,10 +1078,10 @@ final class ViewController: NSViewController, WebSocketDelegate {
            let keyCode = browserKeyCode(with: event)
         {
             if isDown {
-                print(String(format: "key.down(%d)", keyCode))
+                debugPrint(String(format: "key.down(%d)", keyCode))
                 socketWrite(["mode": "input_down", "key": keyCode], to: connectedSocket)
             } else {
-                print(String(format: "key.up(%d)", keyCode))
+                debugPrint(String(format: "key.up(%d)", keyCode))
                 socketWrite(["mode": "input_up", "key": keyCode], to: connectedSocket)
             }
         }
@@ -1051,11 +1094,11 @@ final class ViewController: NSViewController, WebSocketDelegate {
         
         if let keyCode = browserKeyCode(with: event) {
             if event.isARepeat {
-                print(String(format: "key.up(%d)", keyCode))
+                debugPrint(String(format: "key.up(%d)", keyCode))
                 socketWrite(["mode": "input_up", "key": keyCode], to: connectedSocket)
             }
             
-            print(String(format: "key.down(%d)", keyCode))
+            debugPrint(String(format: "key.down(%d)", keyCode))
             socketWrite(["mode": "input_down", "key": keyCode], to: connectedSocket)
         }
     }
@@ -1066,7 +1109,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
         }
         
         if let keyCode = browserKeyCode(with: event) {
-            print(String(format: "key.up(%d)", keyCode))
+            debugPrint(String(format: "key.up(%d)", keyCode))
             socketWrite(["mode": "input_up", "key": keyCode], to: connectedSocket)
         }
     }
@@ -1076,7 +1119,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.down('POWER')")
+        debugPrint("key.down('POWER')")
         socketWrite(["mode": "power_down"], to: connectedSocket)
     }
     
@@ -1085,12 +1128,12 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.up('POWER')")
+        debugPrint("key.up('POWER')")
         socketWrite(["mode": "power_up"], to: connectedSocket)
     }
     
     override func otherMouseDragged(with event: NSEvent) {
-        print("other dragged")
+        debugPrint("other dragged")
     }
     
     override func cursorUpdate(with event: NSEvent) {
@@ -1102,7 +1145,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.press('HOMEBUTTON')")
+        debugPrint("key.press('HOMEBUTTON')")
         socketWrite(["mode": "home"], to: connectedSocket)
     }
     
@@ -1111,7 +1154,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.press('POWER')")
+        debugPrint("key.press('POWER')")
         socketWrite(["mode": "power"], to: connectedSocket)
     }
     
@@ -1120,7 +1163,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.press('MUTE')")
+        debugPrint("key.press('MUTE')")
         socketWrite(["mode": "mute"], to: connectedSocket)
     }
     
@@ -1129,7 +1172,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.press('VOLUMEUP')")
+        debugPrint("key.press('VOLUMEUP')")
         socketWrite(["mode": "volume_increment"], to: connectedSocket)
     }
     
@@ -1138,7 +1181,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.press('VOLUMEDOWN')")
+        debugPrint("key.press('VOLUMEDOWN')")
         socketWrite(["mode": "volume_decrement"], to: connectedSocket)
     }
     
@@ -1147,7 +1190,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.press('SHOW_HIDE_KEYBOARD')")
+        debugPrint("key.press('SHOW_HIDE_KEYBOARD')")
         socketWrite(["mode": "toggle_keyboard"], to: connectedSocket)
     }
     
@@ -1158,7 +1201,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
         
         let pasteboard = NSPasteboard.general
         if let copiedString = pasteboard.string(forType: .string) {
-            print(String(format: "key.send_text('%@')", copiedString))
+            debugPrint(String(format: "key.send_text('%@')", copiedString))
             socketWrite(["mode": "send_text", "data": copiedString], to: connectedSocket)
         }
     }
@@ -1185,7 +1228,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
         
         let pasteboard = NSPasteboard.general
         if let copiedString = pasteboard.string(forType: .string) {
-            print(String(format: "pasteboard.write('%@')", copiedString))
+            debugPrint(String(format: "pasteboard.write('%@')", copiedString))
             socketWrite(["mode": "clipboard", "data": copiedString], to: connectedSocket)
         }
     }
@@ -1195,7 +1238,7 @@ final class ViewController: NSViewController, WebSocketDelegate {
             return
         }
         
-        print("key.press('SNAPSHOT')")
+        debugPrint("key.press('SNAPSHOT')")
         socketWrite(["mode": "snapshot"], to: connectedSocket)
     }
     
@@ -1208,10 +1251,68 @@ final class ViewController: NSViewController, WebSocketDelegate {
     }
     
     @IBAction func takeScreenshot(_ sender: NSMenuItem) {
-        // TODO
+        guard let connectedSocket = connectedSocket else {
+            return
+        }
+        
+        debugPrint("screen.image():png_data()")
+        socketWrite(["mode": "save_snapshot"], to: connectedSocket)
     }
     
     @IBAction func copyOCRResults(_ sender: NSMenuItem) {
-        // TODO
+        guard let playerWindowID = playerWindowID,
+              let playerWindowBounds = playerWindowBounds
+        else {
+            return
+        }
+
+        guard let playerWindowImage = CGWindowListCreateImage(playerWindowBounds, [.optionOnScreenBelowWindow, .optionIncludingWindow, .excludeDesktopElements], CGWindowID(playerWindowID), [.boundsIgnoreFraming, .shouldBeOpaque, .nominalResolution]) else {
+            return
+        }
+        
+        let alert = NSAlert()
+        alert.messageText = "Recognizing…"
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.isHidden = true
+        let indicator = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 32, height: 32))
+        indicator.style = .spinning
+        indicator.sizeToFit()
+        indicator.startAnimation(nil)
+        alert.accessoryView = indicator
+        alert.beginSheetModal(for: view.window!)
+
+        // Create a new image-request handler.
+        let requestHandler = VNImageRequestHandler(cgImage: playerWindowImage)
+
+        // Create a new request to recognize text.
+        let request = VNRecognizeTextRequest { request, _ in
+            guard let observations =
+                request.results as? [VNRecognizedTextObservation] else {
+                return
+            }
+            let recognizedStrings = observations.compactMap { observation in
+                // Return the string of the top VNRecognizedText instance.
+                observation.topCandidates(1).first?.string
+            }
+
+            // Process the recognized strings.
+            let recognizedContent = recognizedStrings.joined(separator: "\n")
+            DispatchQueue.main.async { [unowned self] in
+                let pasteboard = NSPasteboard.general
+                pasteboard.declareTypes([.string], owner: nil)
+                pasteboard.setString(recognizedContent, forType: .string)
+                
+                view.window?.endSheet(alert.window, returnCode: .alertFirstButtonReturn)
+            }
+        }
+        
+        request.recognitionLevel = .accurate
+
+        do {
+            // Perform the text-recognition request.
+            try requestHandler.perform([request])
+        } catch {
+            print("Unable to perform the requests: \(error).")
+        }
     }
 }
